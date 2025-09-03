@@ -37,29 +37,7 @@ Supercharge Claude Desktop and Claude Code with Google's Gemini 2.5 Flash multim
 
 ### Installation
 
-#### Option 1: Quick Setup with npx (Recommended)
-
-For Claude Desktop, add this to your config:
-- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "nanobanana-mcp": {
-      "command": "npx",
-      "args": ["@ycse/nanobanana-mcp@latest"],
-      "env": {
-        "GOOGLE_AI_API_KEY": "your_api_key_here"
-      }
-    }
-  }
-}
-```
-
-Then restart Claude Desktop.
-
-#### Option 2: Local Installation
+#### Option 1: Local Installation
 
 1. **Clone and setup:**
 ```bash
@@ -93,11 +71,11 @@ cp .env.example .env
 
 4. **Restart Claude Desktop**
 
-#### Option 3: Claude Code
+#### Option 2: Claude Code (Recommended)
 
 ```bash
 # Clone and setup
-git clone https://github.com/yourusername/nanobanana-mcp.git
+git clone https://github.com/YCSE/nanobanana-mcp.git
 cd nanobanana-mcp
 npm install
 npm run build

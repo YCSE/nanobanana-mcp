@@ -407,8 +407,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { image_path, edit_prompt, output_path } = args as any;
         
         try {
+          // Handle relative and absolute paths for input image
+          let resolvedImagePath = image_path;
+          if (!path.isAbsolute(resolvedImagePath)) {
+            resolvedImagePath = path.join(process.cwd(), resolvedImagePath);
+          }
+          
+          // Check if file exists
+          try {
+            await fs.access(resolvedImagePath);
+          } catch {
+            // If file doesn't exist in CWD, try in Documents/nanobanana_generated
+            const homeDir = os.homedir();
+            const altPath = path.join(homeDir, 'Documents', 'nanobanana_generated', path.basename(image_path));
+            try {
+              await fs.access(altPath);
+              resolvedImagePath = altPath;
+            } catch {
+              throw new Error(`Image file not found: ${image_path}`);
+            }
+          }
+          
           // Read the original image
-          const imageBase64 = await imageToBase64(image_path);
+          const imageBase64 = await imageToBase64(resolvedImagePath);
           
           // Configure model with image generation capabilities
           const config = {
@@ -511,7 +532,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 {
                   type: "text",
                   text: `✓ Image edited successfully!\n` +
-                        `Original: ${image_path}\n` +
+                        `Original: ${resolvedImagePath}\n` +
                         `Edit request: "${edit_prompt}"\n` +
                         `Saved to: ${finalPath}\n` +
                         (textResponse ? `\nModel response: ${textResponse}` : ''),

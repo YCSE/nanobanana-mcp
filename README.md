@@ -32,28 +32,31 @@ Supercharge Claude Desktop and Claude Code with Google's Gemini 2.5 Flash multim
 ### Prerequisites
 
 - Node.js 18+
-- Claude Desktop or Claude Code
+- One of: Claude Desktop, Claude Code, VSCode, Cursor, or Windsurf
 - Google AI API Key ([Get it here](https://makersuite.google.com/app/apikey))
 
 ### Installation
 
-#### Option 1: Local Installation
+First, clone and build the project:
 
-1. **Clone and setup:**
 ```bash
 git clone https://github.com/YCSE/nanobanana-mcp.git
 cd nanobanana-mcp
 npm install
 npm run build
-```
 
-2. **Configure API Key:**
-```bash
+# Configure API Key
 cp .env.example .env
 # Edit .env and add your GOOGLE_AI_API_KEY
 ```
 
-3. **Add to Claude Desktop:**
+Then choose your platform:
+
+#### Claude Desktop
+
+Edit your Claude Desktop config:
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
@@ -69,24 +72,71 @@ cp .env.example .env
 }
 ```
 
-4. **Restart Claude Desktop**
+Restart Claude Desktop after adding the configuration.
 
-#### Option 2: Claude Code (Recommended)
+#### Claude Code (Recommended)
 
 ```bash
-# Clone and setup
-git clone https://github.com/YCSE/nanobanana-mcp.git
-cd nanobanana-mcp
-npm install
-npm run build
-
-# Configure API
-cp .env.example .env
-# Add your GOOGLE_AI_API_KEY to .env
-
-# Install to Claude Code
+# After building, install to Claude Code
 source .env && claude mcp add nanobanana-mcp "node" "dist/index.js" \
   -e "GOOGLE_AI_API_KEY=$GOOGLE_AI_API_KEY"
+```
+
+#### VSCode
+
+Install the [Continue extension](https://marketplace.visualstudio.com/items?itemName=Continue.continue) and add to `~/.continue/config.json`:
+
+```json
+{
+  "models": [
+    // Your existing models
+  ],
+  "mcpServers": {
+    "nanobanana-mcp": {
+      "command": "node",
+      "args": ["/absolute/path/to/nanobanana-mcp/dist/index.js"],
+      "env": {
+        "GOOGLE_AI_API_KEY": "your_api_key_here"
+      }
+    }
+  }
+}
+```
+
+#### Cursor
+
+Add to your Cursor settings file `~/.cursor/config.json`:
+
+```json
+{
+  "mcpServers": {
+    "nanobanana-mcp": {
+      "command": "node",
+      "args": ["/absolute/path/to/nanobanana-mcp/dist/index.js"],
+      "env": {
+        "GOOGLE_AI_API_KEY": "your_api_key_here"
+      }
+    }
+  }
+}
+```
+
+#### Windsurf
+
+Add to your Windsurf configuration file `~/.windsurf/config.json`:
+
+```json
+{
+  "mcpServers": {
+    "nanobanana-mcp": {
+      "command": "node",
+      "args": ["/absolute/path/to/nanobanana-mcp/dist/index.js"],
+      "env": {
+        "GOOGLE_AI_API_KEY": "your_api_key_here"
+      }
+    }
+  }
+}
 ```
 
 

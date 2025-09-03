@@ -1,0 +1,171 @@
+#!/bin/bash
+
+# NanoBanana MCP CLI for Claude Desktop
+# Usage: claude-mcp <command>
+
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# Colors
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+print_help() {
+    echo -e "${BLUE}NanoBanana MCP CLI for Claude Desktop${NC}"
+    echo ""
+    echo "Usage: claude-mcp <command>"
+    echo ""
+    echo "Commands:"
+    echo "  add       Install NanoBanana MCP to Claude Desktop"
+    echo "  remove    Remove NanoBanana MCP from Claude Desktop"
+    echo "  status    Check installation status"
+    echo "  update    Update and rebuild the MCP server"
+    echo "  logs      Show recent logs"
+    echo "  help      Show this help message"
+}
+
+add_mcp() {
+    "$SCRIPT_DIR/install.sh"
+}
+
+remove_mcp() {
+    echo -e "${YELLOW}Removing NanoBanana MCP from Claude Desktop...${NC}"
+    
+    # Detect OS and set config path
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        CONFIG_PATH="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+    elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ "$OSTYPE" == "win32" ]]; then
+        CONFIG_PATH="$APPDATA/Claude/claude_desktop_config.json"
+    else
+        CONFIG_PATH="$HOME/.config/Claude/claude_desktop_config.json"
+    fi
+    
+    if [ ! -f "$CONFIG_PATH" ]; then
+        echo -e "${RED}Claude Desktop configuration not found${NC}"
+        exit 1
+    fi
+    
+    # Remove from config using Python
+    python3 - <<EOF
+import json
+import sys
+
+config_path = "$CONFIG_PATH"
+
+try:
+    with open(config_path, 'r') as f:
+        config = json.load(f)
+    
+    if 'mcpServers' in config and 'nanobanana-mcp' in config['mcpServers']:
+        del config['mcpServers']['nanobanana-mcp']
+        
+        with open(config_path, 'w') as f:
+            json.dump(config, f, indent=2)
+        
+        print("✓ NanoBanana MCP has been removed")
+    else:
+        print("NanoBanana MCP is not installed")
+except Exception as e:
+    print(f"Error: {e}")
+    sys.exit(1)
+EOF
+}
+
+check_status() {
+    echo -e "${BLUE}Checking NanoBanana MCP status...${NC}"
+    echo ""
+    
+    # Check if built
+    if [ -f "$SCRIPT_DIR/dist/index.js" ]; then
+        echo -e "${GREEN}✓${NC} Project is built"
+    else
+        echo -e "${RED}✗${NC} Project needs to be built (run: claude-mcp update)"
+    fi
+    
+    # Check .env
+    if [ -f "$SCRIPT_DIR/.env" ]; then
+        source "$SCRIPT_DIR/.env"
+        if [ ! -z "$GOOGLE_AI_API_KEY" ]; then
+            echo -e "${GREEN}✓${NC} API key is configured"
+        else
+            echo -e "${RED}✗${NC} API key is missing in .env"
+        fi
+    else
+        echo -e "${RED}✗${NC} .env file not found"
+    fi
+    
+    # Check Claude config
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        CONFIG_PATH="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+    elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ "$OSTYPE" == "win32" ]]; then
+        CONFIG_PATH="$APPDATA/Claude/claude_desktop_config.json"
+    else
+        CONFIG_PATH="$HOME/.config/Claude/claude_desktop_config.json"
+    fi
+    
+    if [ -f "$CONFIG_PATH" ]; then
+        if grep -q "nanobanana-mcp" "$CONFIG_PATH"; then
+            echo -e "${GREEN}✓${NC} Installed in Claude Desktop"
+        else
+            echo -e "${YELLOW}!${NC} Not installed in Claude Desktop (run: claude-mcp add)"
+        fi
+    else
+        echo -e "${YELLOW}!${NC} Claude Desktop config not found"
+    fi
+}
+
+update_mcp() {
+    echo -e "${BLUE}Updating NanoBanana MCP...${NC}"
+    cd "$SCRIPT_DIR"
+    
+    echo "Installing dependencies..."
+    npm install
+    
+    echo "Building project..."
+    npm run build
+    
+    echo -e "${GREEN}✓ Update complete!${NC}"
+    echo "Restart Claude Desktop to apply changes."
+}
+
+show_logs() {
+    echo -e "${BLUE}NanoBanana MCP Logs${NC}"
+    echo "==================="
+    
+    # Show last 20 lines of npm debug log if exists
+    if [ -f "$SCRIPT_DIR/npm-debug.log" ]; then
+        tail -n 20 "$SCRIPT_DIR/npm-debug.log"
+    else
+        echo "No logs found."
+    fi
+}
+
+# Main command handler
+case "$1" in
+    add)
+        add_mcp
+        ;;
+    remove)
+        remove_mcp
+        ;;
+    status)
+        check_status
+        ;;
+    update)
+        update_mcp
+        ;;
+    logs)
+        show_logs
+        ;;
+    help|--help|-h|"")
+        print_help
+        ;;
+    *)
+        echo -e "${RED}Unknown command: $1${NC}"
+        echo ""
+        print_help
+        exit 1
+        ;;
+esac

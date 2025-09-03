@@ -37,7 +37,29 @@ Supercharge Claude Desktop and Claude Code with Google's Gemini 2.5 Flash multim
 
 ### Installation
 
-#### Option 1: Claude Desktop
+#### Option 1: Quick Setup with npx (Recommended)
+
+For Claude Desktop, add this to your config:
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "nanobanana-mcp": {
+      "command": "npx",
+      "args": ["@ycse/nanobanana-mcp@latest"],
+      "env": {
+        "GOOGLE_AI_API_KEY": "your_api_key_here"
+      }
+    }
+  }
+}
+```
+
+Then restart Claude Desktop.
+
+#### Option 2: Local Installation
 
 1. **Clone and setup:**
 ```bash
@@ -55,10 +77,6 @@ cp .env.example .env
 
 3. **Add to Claude Desktop:**
 
-Edit config file:
-- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-
 ```json
 {
   "mcpServers": {
@@ -75,7 +93,7 @@ Edit config file:
 
 4. **Restart Claude Desktop**
 
-#### Option 2: Claude Code (Recommended)
+#### Option 3: Claude Code
 
 ```bash
 # Clone and setup
@@ -93,23 +111,6 @@ source .env && claude mcp add nanobanana-mcp "node" "dist/index.js" \
   -e "GOOGLE_AI_API_KEY=$GOOGLE_AI_API_KEY"
 ```
 
-### Using the Convenience Script
-
-For easier management, use our CLI tool:
-
-```bash
-# Install
-./claude-mcp add
-
-# Check status
-./claude-mcp status
-
-# Update
-./claude-mcp update
-
-# Remove
-./claude-mcp remove
-```
 
 ## 🛠️ Available Tools
 

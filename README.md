@@ -41,7 +41,7 @@ Supercharge Claude Desktop and Claude Code with Google's Gemini 2.5 Flash multim
 
 1. **Clone and setup:**
 ```bash
-git clone https://github.com/yourusername/nanobanana-mcp.git
+git clone https://github.com/YCSE/nanobanana-mcp.git
 cd nanobanana-mcp
 npm install
 npm run build
@@ -283,7 +283,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 If you find this project useful, please consider giving it a star ⭐️
 
-[![Star History Chart](https://api.star-history.com/svg?repos=yourusername/nanobanana-mcp&type=Date)](https://star-history.com/#yourusername/nanobanana-mcp&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=YCSE/nanobanana-mcp&type=Date)](https://star-history.com/#YCSE/nanobanana-mcp&Date)
 
 ## 🙏 Acknowledgments
 
@@ -293,9 +293,9 @@ If you find this project useful, please consider giving it a star ⭐️
 
 ## 📧 Support
 
-- 🐛 [Report Issues](https://github.com/yourusername/nanobanana-mcp/issues)
-- 💬 [Discussions](https://github.com/yourusername/nanobanana-mcp/discussions)
-- 📖 [Documentation](https://github.com/yourusername/nanobanana-mcp/wiki)
+- 🐛 [Report Issues](https://github.com/YCSE/nanobanana-mcp/issues)
+- 💬 [Discussions](https://github.com/YCSE/nanobanana-mcp/discussions)
+- 📖 [Documentation](https://github.com/YCSE/nanobanana-mcp/wiki)
 
 ---
 

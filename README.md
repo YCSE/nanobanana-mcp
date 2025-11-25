@@ -1,18 +1,20 @@
 # 🍌 NanoBanana MCP - Gemini Vision & Image Generation for Claude
 
-[![MCP](https://img.shields.io/badge/MCP-1.0.0-blue)](https://modelcontextprotocol.io)
-[![Gemini](https://img.shields.io/badge/Gemini-2.5%20Flash-orange)](https://ai.google.dev)
+[![MCP](https://img.shields.io/badge/MCP-1.0.1-blue)](https://modelcontextprotocol.io)
+[![Gemini](https://img.shields.io/badge/Gemini-3%20Pro-orange)](https://ai.google.dev)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-Supercharge Claude Desktop and Claude Code with Google's Gemini 2.5 Flash multimodal capabilities! Generate stunning images, edit existing ones, and leverage advanced vision AI - all within your Claude environment.
+Supercharge Claude Desktop and Claude Code with Google's Gemini multimodal capabilities! Generate stunning images with session-based consistency, edit existing ones, and leverage advanced vision AI - all within your Claude environment.
 
 ## ✨ Features
 
-- 🎨 **Image Generation** - Create images from text prompts using Gemini's latest image preview model
+- 🎨 **Image Generation** - Create 2K images from text prompts using Gemini 3 Pro
+- 🔄 **Image Consistency** - Maintain character/style consistency across multiple generations within a session
 - 🖼️ **Image Editing** - Transform existing images with natural language instructions
 - 👁️ **Vision Analysis** - Analyze and understand image content with state-of-the-art vision AI
+- 🔍 **Google Search Integration** - Ground image generation with real-world references
 - 💬 **Multi-turn Chat** - Maintain conversational context across interactions
-- 🚀 **Fast & Efficient** - Powered by Gemini 2.5 Flash for optimal performance
+- 📜 **Session History** - Reference previous images using `last` or `history:N`
 
 ## 🎬 Demo
 
@@ -143,36 +145,59 @@ Add to your Windsurf configuration file `~/.windsurf/config.json`:
 ## 🛠️ Available Tools
 
 ### `gemini_generate_image`
-Generate images from text descriptions.
+Generate 2K images from text descriptions with session-based consistency.
 
 ```typescript
 {
-  prompt: string;       // Image description
-  output_path?: string; // Optional save path (default: ~/Documents/nanobanana_generated/)
+  prompt: string;              // Image description
+  output_path?: string;        // Optional save path (default: ~/Documents/nanobanana_generated/)
+  conversation_id?: string;    // Session ID for image history
+  use_image_history?: boolean; // Use previous images for style/character consistency
+  reference_images?: string[]; // Manual reference images for consistency
+  enable_google_search?: boolean; // Enable Google Search for real-world grounding
 }
 ```
 
-**Example:**
+**Example - Basic:**
 ```
 "Generate a cyberpunk cityscape at sunset with flying cars"
 ```
 
+**Example - With Consistency:**
+```typescript
+// First image
+{ prompt: "A cute red-hat cat", conversation_id: "cat-session" }
+
+// Second image - maintains same character
+{ prompt: "The same cat taking a nap", conversation_id: "cat-session", use_image_history: true }
+```
+
 ### `gemini_edit_image`
-Edit existing images using natural language.
+Edit existing images using natural language. Supports session history references.
 
 ```typescript
 {
-  image_path: string;   // Path to original image
-  edit_prompt: string;  // Edit instructions
-  output_path?: string; // Optional save path
+  image_path: string;          // Path, or "last", or "history:N"
+  edit_prompt: string;         // Edit instructions
+  output_path?: string;        // Optional save path
+  conversation_id?: string;    // Session ID for accessing history
+  reference_images?: string[]; // Additional style references
+  enable_google_search?: boolean; // Enable Google Search
 }
 ```
 
-**Example:**
+**Example - File Path:**
 ```
 "Remove the background and make it transparent"
-"Add snow falling and winter atmosphere"
-"Convert to pixel art style"
+```
+
+**Example - History Reference:**
+```typescript
+// Edit the most recent image in the session
+{ image_path: "last", edit_prompt: "Change hat color to blue", conversation_id: "cat-session" }
+
+// Edit a specific image from history
+{ image_path: "history:0", edit_prompt: "Add sunglasses", conversation_id: "cat-session" }
 ```
 
 ### `gemini_vision`
@@ -204,6 +229,21 @@ Chat with Gemini for general queries.
 }
 ```
 
+### `get_image_history`
+View generated/edited images in a session.
+
+```typescript
+{
+  conversation_id: string;   // Session to view
+}
+```
+
+**Response includes:**
+- Image index and reference (`history:0`, `history:1`, etc.)
+- File paths
+- Original prompts
+- Timestamps
+
 ### `clear_conversation`
 Reset conversation history.
 
@@ -212,6 +252,45 @@ Reset conversation history.
   conversation_id: string;   // Conversation to clear
 }
 ```
+
+## 🔀 Model Variants
+
+NanoBanana MCP uses different Gemini models optimized for each task:
+
+| Tool | Model | Purpose |
+|------|-------|---------|
+| `gemini_generate_image` | `gemini-3-pro-image-preview` | High-quality 2K image generation |
+| `gemini_edit_image` | `gemini-3-pro-image-preview` | Image editing with consistency |
+| `gemini_vision` | `gemini-2.0-flash-exp` | Fast vision analysis |
+| `gemini_chat` | `gemini-2.5-flash-image-preview` | Multi-turn conversation |
+
+### Switching Models
+
+To switch between model variants (e.g., `nanobanana` vs `nanobanana-pro`), edit the model constants in `src/index.ts`:
+
+```typescript
+// For image generation (line ~428)
+const model = 'gemini-3-pro-image-preview';  // Pro version (current)
+// const model = 'gemini-2.5-flash-image-preview';  // Flash version (faster, lower quality)
+
+// For image editing (line ~659)
+const model = 'gemini-3-pro-image-preview';  // Pro version (current)
+// const model = 'gemini-2.5-flash-image-preview';  // Flash version
+```
+
+After editing, rebuild the project:
+```bash
+npm run build
+```
+
+**Model Comparison:**
+| Aspect | Flash (2.5) | Pro (3.0) |
+|--------|-------------|-----------|
+| Speed | Faster | Slower |
+| Quality | Good | Higher |
+| Resolution | 1K | 2K |
+| Consistency | Basic | Better |
+| Cost | Lower | Higher |
 
 ## 🎯 Use Cases
 

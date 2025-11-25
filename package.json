@@ -1,6 +1,6 @@
 {
   "name": "@ycse/nanobanana-mcp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MCP server for Gemini 2.5 Flash with vision, chat, and image generation capabilities",
   "main": "dist/index.js",
   "type": "module",

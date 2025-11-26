@@ -287,7 +287,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         const context = getOrCreateContext(conversation_id);
         const model = genAI.getGenerativeModel({ 
-          model: "gemini-2.5-flash-image-preview",
+          model: "gemini-2.5-flash-image",
           systemInstruction: system_prompt,
         });
 
@@ -326,7 +326,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { image_path, prompt, conversation_id = "default" } = args as any;
 
         const context = getOrCreateContext(conversation_id);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image" });
 
         // Read and encode image
         const imageBase64 = await imageToBase64(image_path);

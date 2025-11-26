@@ -414,7 +414,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           // 이미지 크기 2K 고정
           config.imageConfig = { imageSize: "2K" };
 
-          const model = 'gemini-3-pro-image-preview';
+          const model = 'gemini-2.5-flash-image';
 
           // contents 구성: 참조 이미지 + 히스토리 이미지 + 프롬프트
           const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
@@ -644,7 +644,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           // 이미지 크기 2K 고정
           config.imageConfig = { imageSize: "2K" };
 
-          const model = 'gemini-3-pro-image-preview';
+          const model = 'gemini-2.5-flash-image';
 
           // contents 구성: 참조 이미지들 + 원본 이미지 + 프롬프트
           const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];

@@ -133,7 +133,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: "gemini_chat",
-        description: "Chat with Gemini 2.5 Flash model. Supports multi-turn conversations.",
+        description: "Chat with Gemini 2.5 Flash model. Supports multi-turn conversations with up to 10 reference images.",
         inputSchema: {
           type: "object",
           properties: {
@@ -141,9 +141,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: "string",
               description: "The message to send to Gemini",
             },
+            images: {
+              type: "array",
+              items: { type: "string" },
+              description: "Array of image paths to include in the chat (max 10). Supports file paths, 'last', or 'history:N' references.",
+              maxItems: 10,
+            },
             conversation_id: {
               type: "string",
-              description: "Optional conversation ID for maintaining context",
+              description: "Optional conversation ID for maintaining context and accessing image history",
             },
             system_prompt: {
               type: "string",
@@ -151,28 +157,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ["message"],
-        },
-      },
-      {
-        name: "gemini_vision",
-        description: "Analyze images using Gemini's vision capabilities",
-        inputSchema: {
-          type: "object",
-          properties: {
-            image_path: {
-              type: "string",
-              description: "Path to the image file to analyze",
-            },
-            prompt: {
-              type: "string",
-              description: "Question or instruction about the image",
-            },
-            conversation_id: {
-              type: "string",
-              description: "Optional conversation ID for maintaining context",
-            },
-          },
-          required: ["image_path", "prompt"],
         },
       },
       {
@@ -235,7 +219,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             reference_images: {
               type: "array",
               items: { type: "string" },
-              description: "Additional reference images for style consistency during editing",
+              description: "Additional reference images for style consistency (max 10). Supports file paths, 'last', or 'history:N' references.",
+              maxItems: 10,
             },
             enable_google_search: {
               type: "boolean",
@@ -283,18 +268,61 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     switch (name) {
       case "gemini_chat": {
-        const { message, conversation_id = "default", system_prompt } = args as any;
+        const { message, conversation_id = "default", system_prompt, images = [] } = args as any;
 
         const context = getOrCreateContext(conversation_id);
-        const model = genAI.getGenerativeModel({ 
+        const model = genAI.getGenerativeModel({
           model: "gemini-2.5-flash-image",
           systemInstruction: system_prompt,
         });
 
+        // Build message parts with images (max 10)
+        const messageParts: Part[] = [{ text: message }];
+        const imageRefs = (images as string[]).slice(0, 10);
+
+        for (const imgRef of imageRefs) {
+          try {
+            // Check for history reference
+            const historyImage = getImageFromHistory(context, imgRef);
+            if (historyImage) {
+              messageParts.push({
+                inlineData: {
+                  mimeType: historyImage.mimeType,
+                  data: historyImage.base64Data,
+                },
+              });
+            } else {
+              // File path
+              let resolvedPath = imgRef;
+              if (!path.isAbsolute(resolvedPath)) {
+                resolvedPath = path.join(process.cwd(), resolvedPath);
+              }
+              // Try alternative path if not found
+              try {
+                await fs.access(resolvedPath);
+              } catch {
+                const homeDir = os.homedir();
+                const altPath = path.join(homeDir, 'Documents', 'nanobanana_generated', path.basename(imgRef));
+                await fs.access(altPath);
+                resolvedPath = altPath;
+              }
+              const base64 = await imageToBase64(resolvedPath);
+              messageParts.push({
+                inlineData: {
+                  mimeType: "image/png",
+                  data: base64,
+                },
+              });
+            }
+          } catch {
+            // Skip failed image loads
+          }
+        }
+
         // Add user message to history
         context.history.push({
           role: "user",
-          parts: [{ text: message }],
+          parts: messageParts,
         });
 
         // Start chat with history
@@ -302,7 +330,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           history: context.history.slice(0, -1), // All except the last message
         });
 
-        const result = await chat.sendMessage(message);
+        const result = await chat.sendMessage(messageParts);
         const response = result.response;
         const text = response.text();
 
@@ -312,63 +340,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           parts: [{ text }],
         });
 
+        const imageCount = messageParts.length - 1;
         return {
           content: [
             {
               type: "text",
-              text: text,
-            },
-          ],
-        };
-      }
-
-      case "gemini_vision": {
-        const { image_path, prompt, conversation_id = "default" } = args as any;
-
-        const context = getOrCreateContext(conversation_id);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image" });
-
-        // Read and encode image
-        const imageBase64 = await imageToBase64(image_path);
-        
-        // Add to history
-        context.history.push({
-          role: "user",
-          parts: [
-            { text: prompt },
-            {
-              inlineData: {
-                mimeType: "image/jpeg",
-                data: imageBase64,
-              },
-            },
-          ],
-        });
-
-        const result = await model.generateContent([
-          prompt,
-          {
-            inlineData: {
-              mimeType: "image/jpeg",
-              data: imageBase64,
-            },
-          },
-        ]);
-
-        const response = result.response;
-        const text = response.text();
-
-        // Add response to history
-        context.history.push({
-          role: "model",
-          parts: [{ text }],
-        });
-
-        return {
-          content: [
-            {
-              type: "text",
-              text: text,
+              text: imageCount > 0
+                ? `[${imageCount} image(s) included]\n\n${text}`
+                : text,
             },
           ],
         };
@@ -649,13 +628,33 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           // contents 구성: 참조 이미지들 + 원본 이미지 + 프롬프트
           const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
 
-          // 1. 추가 참조 이미지 (스타일 일관성용)
-          if (reference_images && reference_images.length > 0) {
-            for (const imgPath of reference_images) {
-              try {
-                let refPath = imgPath;
+          // 1. 추가 참조 이미지 (스타일 일관성용, 최대 10개)
+          const refImages = (reference_images as string[] || []).slice(0, 10);
+          for (const imgRef of refImages) {
+            try {
+              // Check for history reference
+              const historyImage = getImageFromHistory(context, imgRef);
+              if (historyImage) {
+                parts.push({
+                  inlineData: {
+                    mimeType: historyImage.mimeType,
+                    data: historyImage.base64Data,
+                  },
+                });
+              } else {
+                // File path
+                let refPath = imgRef;
                 if (!path.isAbsolute(refPath)) {
                   refPath = path.join(process.cwd(), refPath);
+                }
+                // Try alternative path if not found
+                try {
+                  await fs.access(refPath);
+                } catch {
+                  const homeDir = os.homedir();
+                  const altPath = path.join(homeDir, 'Documents', 'nanobanana_generated', path.basename(imgRef));
+                  await fs.access(altPath);
+                  refPath = altPath;
                 }
                 const refBase64 = await imageToBase64(refPath);
                 parts.push({
@@ -664,9 +663,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     data: refBase64,
                   },
                 });
-              } catch {
-                // 참조 이미지 로드 실패 시 건너뛰기
               }
+            } catch {
+              // 참조 이미지 로드 실패 시 건너뛰기
             }
           }
 

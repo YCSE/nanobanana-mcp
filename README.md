@@ -11,7 +11,6 @@ Supercharge Claude Desktop and Claude Code with Google's Gemini multimodal capab
 - 🎨 **Image Generation** - Create 2K images from text prompts using Gemini 3 Pro
 - 🔄 **Image Consistency** - Maintain character/style consistency across multiple generations within a session
 - 🖼️ **Image Editing** - Transform existing images with natural language instructions
-- 👁️ **Vision Analysis** - Analyze and understand image content with state-of-the-art vision AI
 - 🔍 **Google Search Integration** - Ground image generation with real-world references
 - 💬 **Multi-turn Chat** - Maintain conversational context across interactions
 - 📜 **Session History** - Reference previous images using `last` or `history:N`
@@ -24,9 +23,6 @@ Supercharge Claude Desktop and Claude Code with Google's Gemini multimodal capab
 
 # Edit an existing image
 "Add a dramatic T-Rex appearing on the beach, people reacting with surprise"
-
-# Analyze images
-"What's happening in this image? Describe the architectural style."
 ```
 
 ## 🚀 Quick Start
@@ -200,24 +196,6 @@ Edit existing images using natural language. Supports session history references
 { image_path: "history:0", edit_prompt: "Add sunglasses", conversation_id: "cat-session" }
 ```
 
-### `gemini_vision`
-Analyze images and answer questions.
-
-```typescript
-{
-  image_path: string;        // Image to analyze
-  prompt: string;            // Question or instruction
-  conversation_id?: string;  // Optional conversation tracking
-}
-```
-
-**Example:**
-```
-"What's the dominant color scheme in this design?"
-"Extract all text from this screenshot"
-"Is this image accessible for colorblind users?"
-```
-
 ### `gemini_chat`
 Chat with Gemini for general queries.
 
@@ -261,7 +239,6 @@ NanoBanana MCP uses different Gemini models optimized for each task:
 |------|-------|---------|
 | `gemini_generate_image` | `gemini-3-pro-image-preview` | High-quality 2K image generation |
 | `gemini_edit_image` | `gemini-3-pro-image-preview` | Image editing with consistency |
-| `gemini_vision` | `gemini-2.0-flash-exp` | Fast vision analysis |
 | `gemini_chat` | `gemini-2.5-flash-image-preview` | Multi-turn conversation |
 
 ### Switching Models

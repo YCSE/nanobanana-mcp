@@ -8,7 +8,8 @@ Supercharge Claude Desktop and Claude Code with Google's Gemini multimodal capab
 
 ## ✨ Features
 
-- 🎨 **Image Generation** - Create 2K images from text prompts using Gemini 3 Pro
+- 🎨 **Image Generation** - Create 2K images from text prompts using Gemini 2.5 Flash
+- 📐 **Dynamic Aspect Ratio** - Set custom aspect ratios (1:1, 16:9, 9:16, 4:3, 3:4, etc.) per session
 - 🔄 **Image Consistency** - Maintain character/style consistency across multiple generations within a session
 - 🖼️ **Image Editing** - Transform existing images with natural language instructions
 - 🔍 **Google Search Integration** - Ground image generation with real-world references
@@ -140,6 +141,25 @@ Add to your Windsurf configuration file `~/.windsurf/config.json`:
 
 ## 🛠️ Available Tools
 
+### `set_aspect_ratio` ⚠️ Required
+Set the aspect ratio for image generation/editing. **Must be called before generating or editing images.**
+
+```typescript
+{
+  aspect_ratio: string;        // Required: "1:1" | "9:16" | "16:9" | "3:4" | "4:3" | "3:2" | "2:3" | "5:4" | "4:5" | "21:9"
+  conversation_id?: string;    // Session ID (default: "default")
+}
+```
+
+**Example:**
+```typescript
+// Set 16:9 widescreen ratio for the session
+{ aspect_ratio: "16:9", conversation_id: "my-session" }
+
+// Then generate images - they will use 16:9
+{ prompt: "A panoramic mountain landscape", conversation_id: "my-session" }
+```
+
 ### `gemini_generate_image`
 Generate 2K images from text descriptions with session-based consistency.
 
@@ -233,41 +253,16 @@ Reset conversation history.
 
 ## 🔀 Model Variants
 
-NanoBanana MCP uses different Gemini models optimized for each task:
+NanoBanana MCP uses Gemini models optimized for each task:
 
 | Tool | Model | Purpose |
 |------|-------|---------|
-| `gemini_generate_image` | `gemini-3-pro-image-preview` | High-quality 2K image generation |
-| `gemini_edit_image` | `gemini-3-pro-image-preview` | Image editing with consistency |
-| `gemini_chat` | `gemini-2.5-flash-image-preview` | Multi-turn conversation |
-
-### Switching Models
-
-To switch between model variants (e.g., `nanobanana` vs `nanobanana-pro`), edit the model constants in `src/index.ts`:
-
-```typescript
-// For image generation (line ~428)
-const model = 'gemini-3-pro-image-preview';  // Pro version (current)
-// const model = 'gemini-2.5-flash-image-preview';  // Flash version (faster, lower quality)
-
-// For image editing (line ~659)
-const model = 'gemini-3-pro-image-preview';  // Pro version (current)
-// const model = 'gemini-2.5-flash-image-preview';  // Flash version
-```
-
-After editing, rebuild the project:
-```bash
-npm run build
-```
-
-**Model Comparison:**
-| Aspect | Flash (2.5) | Pro (3.0) |
-|--------|-------------|-----------|
-| Speed | Faster | Slower |
-| Quality | Good | Higher |
-| Resolution | 1K | 2K |
-| Consistency | Basic | Better |
-| Cost | Lower | Higher |
+| `set_aspect_ratio` | N/A | Session configuration |
+| `gemini_generate_image` | `gemini-2.5-flash-image` | 2K image generation |
+| `gemini_edit_image` | `gemini-2.5-flash-image` | Image editing with consistency |
+| `gemini_chat` | `gemini-2.5-flash-image` | Multi-turn conversation |
+| `get_image_history` | N/A | View session history |
+| `clear_conversation` | N/A | Reset session |
 
 ## 🎯 Use Cases
 

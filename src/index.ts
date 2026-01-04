@@ -31,6 +31,13 @@ const genAINew = new GoogleGenAI({
   apiKey: API_KEY,
 });
 
+// 유효한 이미지 비율 목록
+const VALID_ASPECT_RATIOS = [
+  "1:1", "9:16", "16:9", "3:4", "4:3",
+  "3:2", "2:3", "5:4", "4:5", "21:9"
+] as const;
+type AspectRatio = typeof VALID_ASPECT_RATIOS[number];
+
 // 이미지 히스토리 엔트리 - 세션 내 이미지 일관성 유지용
 interface ImageHistoryEntry {
   id: string;
@@ -48,6 +55,7 @@ interface ConversationContext {
     parts: Part[];
   }>;
   imageHistory: ImageHistoryEntry[];
+  aspectRatio: AspectRatio | null;
 }
 
 const conversations = new Map<string, ConversationContext>();
@@ -97,7 +105,11 @@ function getImageFromHistory(
 // 대화 컨텍스트 초기화/가져오기
 function getOrCreateContext(conversationId: string): ConversationContext {
   if (!conversations.has(conversationId)) {
-    conversations.set(conversationId, { history: [], imageHistory: [] });
+    conversations.set(conversationId, {
+      history: [],
+      imageHistory: [],
+      aspectRatio: null,  // Must be set via set_aspect_ratio before image generation
+    });
   }
   return conversations.get(conversationId)!;
 }
@@ -258,6 +270,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["conversation_id"],
         },
       },
+      {
+        name: "set_aspect_ratio",
+        description: "Set the aspect ratio for subsequent image generation and editing in this session. Must be called before generating/editing images if a specific ratio is desired.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            aspect_ratio: {
+              type: "string",
+              enum: [...VALID_ASPECT_RATIOS],
+              description: "The aspect ratio to use for image generation/editing",
+            },
+            conversation_id: {
+              type: "string",
+              description: "Session ID to apply this setting to (default: 'default')",
+            },
+          },
+          required: ["aspect_ratio"],
+        },
+      },
     ],
   };
 });
@@ -279,6 +310,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // Build message parts with images (max 10)
         const messageParts: Part[] = [{ text: message }];
         const imageRefs = (images as string[]).slice(0, 10);
+        const failedImages: Array<{ path: string; reason: string }> = [];
 
         for (const imgRef of imageRefs) {
           try {
@@ -314,8 +346,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 },
               });
             }
-          } catch {
-            // Skip failed image loads
+          } catch (error) {
+            failedImages.push({
+              path: imgRef,
+              reason: error instanceof Error ? error.message : String(error),
+            });
           }
         }
 
@@ -341,15 +376,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
 
         const imageCount = messageParts.length - 1;
+        let responseText = imageCount > 0
+          ? `[${imageCount} image(s) included]\n\n${text}`
+          : text;
+
+        if (failedImages.length > 0) {
+          responseText += `\n\nWarning: ${failedImages.length} image(s) could not be loaded:\n`;
+          responseText += failedImages.map(f => `  - ${f.path}: ${f.reason}`).join('\n');
+        }
+
         return {
-          content: [
-            {
-              type: "text",
-              text: imageCount > 0
-                ? `[${imageCount} image(s) included]\n\n${text}`
-                : text,
-            },
-          ],
+          content: [{ type: "text", text: responseText }],
         };
       }
 
@@ -366,6 +403,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         try {
           // 대화 컨텍스트 가져오기/생성
           const context = getOrCreateContext(conversation_id);
+
+          // aspectRatio 필수 체크
+          if (context.aspectRatio === null) {
+            return {
+              content: [{
+                type: "text",
+                text: `Error: Aspect ratio not set. Please call set_aspect_ratio first.\nValid ratios: ${VALID_ASPECT_RATIOS.join(", ")}`,
+              }],
+              isError: true,
+            };
+          }
 
           // Configure model with image generation capabilities
           const config: Record<string, unknown> = {
@@ -390,13 +438,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             ],
           };
 
-          // 이미지 크기 2K 고정
-          config.imageConfig = { imageSize: "2K" };
+          // 이미지 크기 2K, aspectRatio는 세션 설정 사용
+          config.imageConfig = { imageSize: "2K", aspectRatio: context.aspectRatio };
 
           const model = 'gemini-2.5-flash-image';
 
           // contents 구성: 참조 이미지 + 히스토리 이미지 + 프롬프트
           const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
+          const failedReferenceImages: Array<{ path: string; reason: string }> = [];
 
           // 1. 수동 지정 참조 이미지 추가
           if (reference_images && reference_images.length > 0) {
@@ -413,8 +462,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     data: base64,
                   },
                 });
-              } catch {
-                // 참조 이미지 로드 실패 시 건너뛰기
+              } catch (error) {
+                failedReferenceImages.push({
+                  path: imgPath,
+                  reason: error instanceof Error ? error.message : String(error),
+                });
               }
             }
           }
@@ -513,17 +565,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               type: "generated",
             });
 
+            let successText = `Image generated successfully!\n` +
+                  `Prompt: "${prompt}"\n` +
+                  `Saved to: ${finalPath}\n` +
+                  `Session: ${conversation_id} (history: ${context.imageHistory.length} images)`;
+
+            if (failedReferenceImages.length > 0) {
+              successText += `\n\nWarning: ${failedReferenceImages.length} reference image(s) could not be loaded:\n`;
+              successText += failedReferenceImages.map(f => `  - ${f.path}: ${f.reason}`).join('\n');
+            }
+
+            if (textResponse) {
+              successText += `\n\nModel response: ${textResponse}`;
+            }
+
             return {
-              content: [
-                {
-                  type: "text",
-                  text: `✓ Image generated successfully!\n` +
-                        `Prompt: "${prompt}"\n` +
-                        `Saved to: ${finalPath}\n` +
-                        `Session: ${conversation_id} (history: ${context.imageHistory.length} images)\n` +
-                        (textResponse ? `\nModel response: ${textResponse}` : ''),
-                },
-              ],
+              content: [{ type: "text", text: successText }],
             };
           } else {
             return {
@@ -535,6 +592,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                         (textResponse ? `Model response: ${textResponse}` : 'No response from model'),
                 },
               ],
+              isError: true,
             };
           }
         } catch (error) {
@@ -562,6 +620,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         try {
           // 대화 컨텍스트 가져오기/생성
           const context = getOrCreateContext(conversation_id);
+
+          // aspectRatio 필수 체크
+          if (context.aspectRatio === null) {
+            return {
+              content: [{
+                type: "text",
+                text: `Error: Aspect ratio not set. Please call set_aspect_ratio first.\nValid ratios: ${VALID_ASPECT_RATIOS.join(", ")}`,
+              }],
+              isError: true,
+            };
+          }
 
           // 히스토리 참조 확인 ("last", "history:N")
           let resolvedImagePath = image_path;
@@ -620,13 +689,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             ],
           };
 
-          // 이미지 크기 2K 고정
-          config.imageConfig = { imageSize: "2K" };
+          // 이미지 크기 2K, aspectRatio는 세션 설정 사용
+          config.imageConfig = { imageSize: "2K", aspectRatio: context.aspectRatio };
 
           const model = 'gemini-2.5-flash-image';
 
           // contents 구성: 참조 이미지들 + 원본 이미지 + 프롬프트
           const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
+          const failedReferenceImages: Array<{ path: string; reason: string }> = [];
 
           // 1. 추가 참조 이미지 (스타일 일관성용, 최대 10개)
           const refImages = (reference_images as string[] || []).slice(0, 10);
@@ -664,8 +734,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   },
                 });
               }
-            } catch {
-              // 참조 이미지 로드 실패 시 건너뛰기
+            } catch (error) {
+              failedReferenceImages.push({
+                path: imgRef,
+                reason: error instanceof Error ? error.message : String(error),
+              });
             }
           }
 
@@ -756,18 +829,23 @@ IMPORTANT: Create a completely new image that incorporates the requested changes
               type: "edited",
             });
 
+            let successText = `Image edited successfully!\n` +
+                  `Original: ${historyImage ? `[${image_path}] ${resolvedImagePath}` : resolvedImagePath}\n` +
+                  `Edit request: "${edit_prompt}"\n` +
+                  `Saved to: ${finalPath}\n` +
+                  `Session: ${conversation_id} (history: ${context.imageHistory.length} images)`;
+
+            if (failedReferenceImages.length > 0) {
+              successText += `\n\nWarning: ${failedReferenceImages.length} reference image(s) could not be loaded:\n`;
+              successText += failedReferenceImages.map(f => `  - ${f.path}: ${f.reason}`).join('\n');
+            }
+
+            if (textResponse) {
+              successText += `\n\nModel response: ${textResponse}`;
+            }
+
             return {
-              content: [
-                {
-                  type: "text",
-                  text: `✓ Image edited successfully!\n` +
-                        `Original: ${historyImage ? `[${image_path}] ${resolvedImagePath}` : resolvedImagePath}\n` +
-                        `Edit request: "${edit_prompt}"\n` +
-                        `Saved to: ${finalPath}\n` +
-                        `Session: ${conversation_id} (history: ${context.imageHistory.length} images)\n` +
-                        (textResponse ? `\nModel response: ${textResponse}` : ''),
-                },
-              ],
+              content: [{ type: "text", text: successText }],
             };
           } else {
             return {
@@ -780,6 +858,7 @@ IMPORTANT: Create a completely new image that incorporates the requested changes
                         (textResponse ? `Model response: ${textResponse}` : 'No response from model'),
                 },
               ],
+              isError: true,
             };
           }
         } catch (error) {
@@ -834,7 +913,7 @@ IMPORTANT: Create a completely new image that incorporates the requested changes
       case "clear_conversation": {
         const { conversation_id } = args as any;
         conversations.delete(conversation_id);
-        
+
         return {
           content: [
             {
@@ -842,6 +921,31 @@ IMPORTANT: Create a completely new image that incorporates the requested changes
               text: `Conversation history cleared for ID: ${conversation_id}`,
             },
           ],
+        };
+      }
+
+      case "set_aspect_ratio": {
+        const { aspect_ratio, conversation_id = "default" } = args as any;
+
+        // Validate aspect ratio
+        if (!VALID_ASPECT_RATIOS.includes(aspect_ratio as AspectRatio)) {
+          return {
+            content: [{
+              type: "text",
+              text: `Invalid aspect ratio: ${aspect_ratio}. Valid: ${VALID_ASPECT_RATIOS.join(", ")}`,
+            }],
+            isError: true,
+          };
+        }
+
+        const context = getOrCreateContext(conversation_id);
+        context.aspectRatio = aspect_ratio as AspectRatio;
+
+        return {
+          content: [{
+            type: "text",
+            text: `✓ Aspect ratio set to ${aspect_ratio} for session: ${conversation_id}\nThis will apply to both image generation and editing.`,
+          }],
         };
       }
 

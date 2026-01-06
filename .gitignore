@@ -10,3 +10,4 @@ dist/
 *.swo
 coverage/
 .nyc_output/
+.mcp.json

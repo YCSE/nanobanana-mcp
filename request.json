@@ -1,0 +1,18 @@
+{
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "A young Korean woman enjoying a sunny day at a beautiful tropical beach. She has long flowing black hair, wearing casual summer beachwear. The scene shows her walking happily along the shoreline with turquoise ocean water and pristine white sand in the background. Warm golden hour lighting, cinematic photography style, natural and candid pose."
+          }
+        ]
+      }
+    ],
+    "generationConfig": {
+      "responseModalities": ["IMAGE", "TEXT"],
+      "imageConfig": {
+        "aspectRatio": "16:9"
+      }
+    }
+}

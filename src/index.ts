@@ -7,11 +7,6 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { GoogleGenerativeAI, Part } from "@google/generative-ai";
-import {
-  GoogleGenAI,
-  HarmBlockThreshold,
-  HarmCategory,
-} from '@google/genai';
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as os from "os";
@@ -27,9 +22,93 @@ if (!API_KEY) {
 }
 
 const genAI = new GoogleGenerativeAI(API_KEY);
-const genAINew = new GoogleGenAI({
-  apiKey: API_KEY,
-});
+
+// Gemini REST API 직접 호출을 위한 설정
+const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+const IMAGE_MODEL = "gemini-2.5-flash-image";
+
+// 이미지 생성/편집을 위한 REST API 호출 함수
+interface GeminiImageRequestPart {
+  text?: string;
+  inlineData?: {
+    mimeType: string;
+    data: string;
+  };
+}
+
+interface GeminiImageResponse {
+  imageData?: string;
+  textResponse: string;
+  error?: string;
+}
+
+async function callGeminiImageAPI(
+  parts: GeminiImageRequestPart[],
+  aspectRatio: string
+): Promise<GeminiImageResponse> {
+  const url = `${GEMINI_API_BASE}/${IMAGE_MODEL}:streamGenerateContent?key=${API_KEY}`;
+
+  const requestBody = {
+    contents: [
+      {
+        role: "user",
+        parts,
+      },
+    ],
+    generationConfig: {
+      responseModalities: ["IMAGE", "TEXT"],
+      imageConfig: {
+        aspectRatio,
+      },
+    },
+  };
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`API request failed: ${response.status} - ${errorText}`);
+  }
+
+  const responseText = await response.text();
+
+  // 스트리밍 응답 파싱 (여러 JSON 청크가 배열로 반환됨)
+  let imageData: string | undefined;
+  let textParts: string[] = [];
+
+  try {
+    // 응답이 JSON 배열 형태로 옴
+    const chunks = JSON.parse(responseText);
+
+    for (const chunk of chunks) {
+      const parts = chunk?.candidates?.[0]?.content?.parts || [];
+      for (const part of parts) {
+        if (part.inlineData?.data) {
+          imageData = part.inlineData.data;
+        } else if (part.text) {
+          textParts.push(part.text);
+        }
+      }
+    }
+  } catch {
+    // 파싱 실패 시 원본 텍스트 반환
+    return {
+      textResponse: responseText,
+      error: "Failed to parse API response",
+    };
+  }
+
+  return {
+    imageData,
+    textResponse: textParts.join(""),
+  };
+}
 
 // 유효한 이미지 비율 목록
 const VALID_ASPECT_RATIOS = [
@@ -181,6 +260,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: "string",
               description: "Description of the image to generate",
             },
+            aspect_ratio: {
+              type: "string",
+              enum: [...VALID_ASPECT_RATIOS],
+              description: "Aspect ratio for the generated image. Overrides session setting if provided.",
+            },
             output_path: {
               type: "string",
               description: "Optional path where to save the generated image. If not provided, saves to ~/Documents/nanobanana_generated/",
@@ -219,6 +303,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             edit_prompt: {
               type: "string",
               description: "Instructions for how to edit the image",
+            },
+            aspect_ratio: {
+              type: "string",
+              enum: [...VALID_ASPECT_RATIOS],
+              description: "Aspect ratio for the edited image. Overrides session setting if provided.",
             },
             output_path: {
               type: "string",
@@ -393,58 +482,44 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "gemini_generate_image": {
         const {
           prompt,
+          aspect_ratio,
           output_path,
           conversation_id = "default",
           use_image_history = false,
           reference_images = [],
-          enable_google_search = false,
         } = args as any;
 
         try {
           // 대화 컨텍스트 가져오기/생성
           const context = getOrCreateContext(conversation_id);
 
-          // aspectRatio 필수 체크
-          if (context.aspectRatio === null) {
+          // Validate directly passed aspect_ratio
+          if (aspect_ratio && !VALID_ASPECT_RATIOS.includes(aspect_ratio as AspectRatio)) {
             return {
               content: [{
                 type: "text",
-                text: `Error: Aspect ratio not set. Please call set_aspect_ratio first.\nValid ratios: ${VALID_ASPECT_RATIOS.join(", ")}`,
+                text: `Invalid aspect ratio: ${aspect_ratio}. Valid: ${VALID_ASPECT_RATIOS.join(", ")}`,
               }],
               isError: true,
             };
           }
 
-          // Configure model with image generation capabilities
-          const config: Record<string, unknown> = {
-            responseModalities: ['IMAGE', 'TEXT'],
-            safetySettings: [
-              {
-                category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-                threshold: HarmBlockThreshold.BLOCK_NONE,
-              },
-              {
-                category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                threshold: HarmBlockThreshold.BLOCK_NONE,
-              },
-              {
-                category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                threshold: HarmBlockThreshold.BLOCK_NONE,
-              },
-              {
-                category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                threshold: HarmBlockThreshold.BLOCK_NONE,
-              },
-            ],
-          };
+          // Priority: direct param > session setting
+          const effectiveAspectRatio = aspect_ratio ?? context.aspectRatio;
 
-          // 이미지 크기 2K, aspectRatio는 세션 설정 사용
-          config.imageConfig = { imageSize: "2K", aspectRatio: context.aspectRatio };
-
-          const model = 'gemini-2.5-flash-image';
+          // aspectRatio 필수 체크 (둘 다 없으면 에러)
+          if (effectiveAspectRatio === null) {
+            return {
+              content: [{
+                type: "text",
+                text: `Error: Aspect ratio not specified. Either pass aspect_ratio parameter or call set_aspect_ratio first.\nValid ratios: ${VALID_ASPECT_RATIOS.join(", ")}`,
+              }],
+              isError: true,
+            };
+          }
 
           // contents 구성: 참조 이미지 + 히스토리 이미지 + 프롬프트
-          const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
+          const parts: GeminiImageRequestPart[] = [];
           const failedReferenceImages: Array<{ path: string; reason: string }> = [];
 
           // 1. 수동 지정 참조 이미지 추가
@@ -491,118 +566,85 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
           parts.push({ text: finalPrompt });
 
-          const contents = [
-            {
-              role: 'user' as const,
-              parts,
-            },
-          ];
+          // REST API 직접 호출
+          const apiResponse = await callGeminiImageAPI(parts, effectiveAspectRatio);
 
-          // Google Search 도구 (조건부)
-          const tools = enable_google_search ? [{ googleSearch: {} }] : undefined;
+          if (apiResponse.error) {
+            return {
+              content: [{
+                type: "text",
+                text: `Image generation failed: ${apiResponse.error}\n${apiResponse.textResponse}`,
+              }],
+              isError: true,
+            };
+          }
 
-          // Generate image
-          const response = await genAINew.models.generateContentStream({
-            model,
-            config,
-            contents,
-            ...(tools && { tools }),
-          });
+          if (!apiResponse.imageData) {
+            return {
+              content: [{
+                type: "text",
+                text: `Image generation failed.\nPrompt: "${prompt}"\n` +
+                      (apiResponse.textResponse ? `Model response: ${apiResponse.textResponse}` : 'No image returned from model'),
+              }],
+              isError: true,
+            };
+          }
 
           // Determine output path - always ensure PNG extension
           let finalPath = output_path;
           if (!finalPath) {
-            // Use ~/Documents/nanobanana_generated for generated images
             const homeDir = os.homedir();
             const tempDir = path.join(homeDir, 'Documents', 'nanobanana_generated');
             await fs.mkdir(tempDir, { recursive: true });
             const filename = `generated_${Date.now()}.png`;
             finalPath = path.join(tempDir, filename);
           } else {
-            // Handle relative and absolute paths
             if (!path.isAbsolute(finalPath)) {
               finalPath = path.join(process.cwd(), finalPath);
             }
-            // Ensure the output path has .png extension
             if (!finalPath.toLowerCase().endsWith('.png')) {
-              // Replace any existing extension or add .png
               finalPath = finalPath.replace(/\.[^/.]+$/, '') + '.png';
             }
           }
 
-          let imageGenerated = false;
-          let textResponse = '';
-          let generatedImageBase64 = '';
+          // Save image
+          const buffer = Buffer.from(apiResponse.imageData, 'base64');
+          await saveImageFromBuffer(buffer, finalPath);
 
-          // Process response stream
-          for await (const chunk of response) {
-            if (!chunk.candidates || !chunk.candidates[0].content || !chunk.candidates[0].content.parts) {
-              continue;
-            }
+          // 생성된 이미지를 히스토리에 저장
+          addImageToHistory(context, {
+            id: generateImageId(),
+            filePath: finalPath,
+            base64Data: apiResponse.imageData,
+            mimeType: "image/png",
+            prompt: prompt,
+            timestamp: Date.now(),
+            type: "generated",
+          });
 
-            if (chunk.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
-              const inlineData = chunk.candidates[0].content.parts[0].inlineData;
-              generatedImageBase64 = inlineData.data || '';
-              const buffer = Buffer.from(generatedImageBase64, 'base64');
+          let successText = `Image generated successfully!\n` +
+                `Prompt: "${prompt}"\n` +
+                `Saved to: ${finalPath}\n` +
+                `Session: ${conversation_id} (history: ${context.imageHistory.length} images)`;
 
-              // Save image as PNG
-              await saveImageFromBuffer(buffer, finalPath);
-              imageGenerated = true;
-            } else if (chunk.candidates?.[0]?.content?.parts?.[0]?.text) {
-              textResponse += chunk.candidates[0].content.parts[0].text;
-            }
+          if (failedReferenceImages.length > 0) {
+            successText += `\n\nWarning: ${failedReferenceImages.length} reference image(s) could not be loaded:\n`;
+            successText += failedReferenceImages.map(f => `  - ${f.path}: ${f.reason}`).join('\n');
           }
 
-          if (imageGenerated) {
-            // 생성된 이미지를 히스토리에 저장
-            addImageToHistory(context, {
-              id: generateImageId(),
-              filePath: finalPath,
-              base64Data: generatedImageBase64,
-              mimeType: "image/png",
-              prompt: prompt,
-              timestamp: Date.now(),
-              type: "generated",
-            });
-
-            let successText = `Image generated successfully!\n` +
-                  `Prompt: "${prompt}"\n` +
-                  `Saved to: ${finalPath}\n` +
-                  `Session: ${conversation_id} (history: ${context.imageHistory.length} images)`;
-
-            if (failedReferenceImages.length > 0) {
-              successText += `\n\nWarning: ${failedReferenceImages.length} reference image(s) could not be loaded:\n`;
-              successText += failedReferenceImages.map(f => `  - ${f.path}: ${f.reason}`).join('\n');
-            }
-
-            if (textResponse) {
-              successText += `\n\nModel response: ${textResponse}`;
-            }
-
-            return {
-              content: [{ type: "text", text: successText }],
-            };
-          } else {
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: `Image generation failed.\n` +
-                        `Prompt: "${prompt}"\n` +
-                        (textResponse ? `Model response: ${textResponse}` : 'No response from model'),
-                },
-              ],
-              isError: true,
-            };
+          if (apiResponse.textResponse) {
+            successText += `\n\nModel response: ${apiResponse.textResponse}`;
           }
+
+          return {
+            content: [{ type: "text", text: successText }],
+          };
         } catch (error) {
           return {
-            content: [
-              {
-                type: "text",
-                text: `Error generating image: ${error instanceof Error ? error.message : String(error)}`,
-              },
-            ],
+            content: [{
+              type: "text",
+              text: `Error generating image: ${error instanceof Error ? error.message : String(error)}`,
+            }],
           };
         }
       }
@@ -611,22 +653,36 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const {
           image_path,
           edit_prompt,
+          aspect_ratio,
           output_path,
           conversation_id = "default",
           reference_images = [],
-          enable_google_search = false,
         } = args as any;
 
         try {
           // 대화 컨텍스트 가져오기/생성
           const context = getOrCreateContext(conversation_id);
 
-          // aspectRatio 필수 체크
-          if (context.aspectRatio === null) {
+          // Validate directly passed aspect_ratio
+          if (aspect_ratio && !VALID_ASPECT_RATIOS.includes(aspect_ratio as AspectRatio)) {
             return {
               content: [{
                 type: "text",
-                text: `Error: Aspect ratio not set. Please call set_aspect_ratio first.\nValid ratios: ${VALID_ASPECT_RATIOS.join(", ")}`,
+                text: `Invalid aspect ratio: ${aspect_ratio}. Valid: ${VALID_ASPECT_RATIOS.join(", ")}`,
+              }],
+              isError: true,
+            };
+          }
+
+          // Priority: direct param > session setting
+          const effectiveAspectRatio = aspect_ratio ?? context.aspectRatio;
+
+          // aspectRatio 필수 체크 (둘 다 없으면 에러)
+          if (effectiveAspectRatio === null) {
+            return {
+              content: [{
+                type: "text",
+                text: `Error: Aspect ratio not specified. Either pass aspect_ratio parameter or call set_aspect_ratio first.\nValid ratios: ${VALID_ASPECT_RATIOS.join(", ")}`,
               }],
               isError: true,
             };
@@ -666,36 +722,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             imageBase64 = await imageToBase64(resolvedImagePath);
           }
 
-          // Configure model with image generation capabilities
-          const config: Record<string, unknown> = {
-            responseModalities: ['IMAGE', 'TEXT'],
-            safetySettings: [
-              {
-                category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-                threshold: HarmBlockThreshold.BLOCK_NONE,
-              },
-              {
-                category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                threshold: HarmBlockThreshold.BLOCK_NONE,
-              },
-              {
-                category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                threshold: HarmBlockThreshold.BLOCK_NONE,
-              },
-              {
-                category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                threshold: HarmBlockThreshold.BLOCK_NONE,
-              },
-            ],
-          };
-
-          // 이미지 크기 2K, aspectRatio는 세션 설정 사용
-          config.imageConfig = { imageSize: "2K", aspectRatio: context.aspectRatio };
-
-          const model = 'gemini-2.5-flash-image';
-
-          // contents 구성: 참조 이미지들 + 원본 이미지 + 프롬프트
-          const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
+          // contents 구성: 참조 이미지들 + 프롬프트 + 원본 이미지
+          const parts: GeminiImageRequestPart[] = [];
           const failedReferenceImages: Array<{ path: string; reason: string }> = [];
 
           // 1. 추가 참조 이미지 (스타일 일관성용, 최대 10개)
@@ -703,12 +731,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           for (const imgRef of refImages) {
             try {
               // Check for history reference
-              const historyImage = getImageFromHistory(context, imgRef);
-              if (historyImage) {
+              const refHistoryImage = getImageFromHistory(context, imgRef);
+              if (refHistoryImage) {
                 parts.push({
                   inlineData: {
-                    mimeType: historyImage.mimeType,
-                    data: historyImage.base64Data,
+                    mimeType: refHistoryImage.mimeType,
+                    data: refHistoryImage.base64Data,
                   },
                 });
               } else {
@@ -756,28 +784,33 @@ IMPORTANT: Create a completely new image that incorporates the requested changes
             },
           });
 
-          const contents = [
-            {
-              role: 'user' as const,
-              parts,
-            },
-          ];
+          // REST API 직접 호출
+          const apiResponse = await callGeminiImageAPI(parts, effectiveAspectRatio);
 
-          // Google Search 도구 (조건부)
-          const tools = enable_google_search ? [{ googleSearch: {} }] : undefined;
+          if (apiResponse.error) {
+            return {
+              content: [{
+                type: "text",
+                text: `Image editing failed: ${apiResponse.error}\n${apiResponse.textResponse}`,
+              }],
+              isError: true,
+            };
+          }
 
-          // Generate edited image
-          const response = await genAINew.models.generateContentStream({
-            model,
-            config,
-            contents,
-            ...(tools && { tools }),
-          });
+          if (!apiResponse.imageData) {
+            return {
+              content: [{
+                type: "text",
+                text: `Image editing failed.\nOriginal: ${image_path}\nEdit request: "${edit_prompt}"\n` +
+                      (apiResponse.textResponse ? `Model response: ${apiResponse.textResponse}` : 'No image returned from model'),
+              }],
+              isError: true,
+            };
+          }
 
           // Determine output path - ensure PNG extension for edited images
           let finalPath = output_path;
           if (!finalPath) {
-            // If no output path specified, save with _edited suffix
             const origName = historyImage ? `history_${historyImage.id}` : path.parse(image_path).name;
             const homeDir = os.homedir();
             const tempDir = path.join(homeDir, 'Documents', 'nanobanana_generated');
@@ -785,7 +818,6 @@ IMPORTANT: Create a completely new image that incorporates the requested changes
             const filename = `${origName}_edited_${Date.now()}.png`;
             finalPath = path.join(tempDir, filename);
           } else {
-            // Handle relative and absolute paths
             if (!path.isAbsolute(finalPath)) {
               finalPath = path.join(process.cwd(), finalPath);
             }
@@ -794,81 +826,45 @@ IMPORTANT: Create a completely new image that incorporates the requested changes
             }
           }
 
-          let imageGenerated = false;
-          let textResponse = '';
-          let editedImageBase64 = '';
+          // Save image
+          const buffer = Buffer.from(apiResponse.imageData, 'base64');
+          await saveImageFromBuffer(buffer, finalPath);
 
-          // Process response stream
-          for await (const chunk of response) {
-            if (!chunk.candidates || !chunk.candidates[0].content || !chunk.candidates[0].content.parts) {
-              continue;
-            }
+          // 편집된 이미지를 히스토리에 저장
+          addImageToHistory(context, {
+            id: generateImageId(),
+            filePath: finalPath,
+            base64Data: apiResponse.imageData,
+            mimeType: "image/png",
+            prompt: edit_prompt,
+            timestamp: Date.now(),
+            type: "edited",
+          });
 
-            if (chunk.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
-              const inlineData = chunk.candidates[0].content.parts[0].inlineData;
-              editedImageBase64 = inlineData.data || '';
-              const buffer = Buffer.from(editedImageBase64, 'base64');
+          let successText = `Image edited successfully!\n` +
+                `Original: ${historyImage ? `[${image_path}] ${resolvedImagePath}` : resolvedImagePath}\n` +
+                `Edit request: "${edit_prompt}"\n` +
+                `Saved to: ${finalPath}\n` +
+                `Session: ${conversation_id} (history: ${context.imageHistory.length} images)`;
 
-              // Save edited image as PNG
-              await saveImageFromBuffer(buffer, finalPath);
-              imageGenerated = true;
-            } else if (chunk.candidates?.[0]?.content?.parts?.[0]?.text) {
-              textResponse += chunk.candidates[0].content.parts[0].text;
-            }
+          if (failedReferenceImages.length > 0) {
+            successText += `\n\nWarning: ${failedReferenceImages.length} reference image(s) could not be loaded:\n`;
+            successText += failedReferenceImages.map(f => `  - ${f.path}: ${f.reason}`).join('\n');
           }
 
-          if (imageGenerated) {
-            // 편집된 이미지를 히스토리에 저장
-            addImageToHistory(context, {
-              id: generateImageId(),
-              filePath: finalPath,
-              base64Data: editedImageBase64,
-              mimeType: "image/png",
-              prompt: edit_prompt,
-              timestamp: Date.now(),
-              type: "edited",
-            });
-
-            let successText = `Image edited successfully!\n` +
-                  `Original: ${historyImage ? `[${image_path}] ${resolvedImagePath}` : resolvedImagePath}\n` +
-                  `Edit request: "${edit_prompt}"\n` +
-                  `Saved to: ${finalPath}\n` +
-                  `Session: ${conversation_id} (history: ${context.imageHistory.length} images)`;
-
-            if (failedReferenceImages.length > 0) {
-              successText += `\n\nWarning: ${failedReferenceImages.length} reference image(s) could not be loaded:\n`;
-              successText += failedReferenceImages.map(f => `  - ${f.path}: ${f.reason}`).join('\n');
-            }
-
-            if (textResponse) {
-              successText += `\n\nModel response: ${textResponse}`;
-            }
-
-            return {
-              content: [{ type: "text", text: successText }],
-            };
-          } else {
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: `Image editing failed.\n` +
-                        `Original: ${image_path}\n` +
-                        `Edit request: "${edit_prompt}"\n` +
-                        (textResponse ? `Model response: ${textResponse}` : 'No response from model'),
-                },
-              ],
-              isError: true,
-            };
+          if (apiResponse.textResponse) {
+            successText += `\n\nModel response: ${apiResponse.textResponse}`;
           }
+
+          return {
+            content: [{ type: "text", text: successText }],
+          };
         } catch (error) {
           return {
-            content: [
-              {
-                type: "text",
-                text: `Error editing image: ${error instanceof Error ? error.message : String(error)}`,
-              },
-            ],
+            content: [{
+              type: "text",
+              text: `Error editing image: ${error instanceof Error ? error.message : String(error)}`,
+            }],
           };
         }
       }

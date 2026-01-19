@@ -4,7 +4,7 @@
 [![Gemini](https://img.shields.io/badge/Gemini-Image%20Models-orange)](https://ai.google.dev)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-MCP server that brings Gemini's image generation and editing capabilities to Claude Desktop and Claude Code.
+MCP server that brings Gemini's image generation and editing capabilities to Claude Desktop, Claude Code, and Cursor.
 
 ## Features
 
@@ -58,6 +58,42 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
   }
 }
 ```
+
+### Add to Cursor
+
+Create or edit `.cursor/mcp.json` (project-level) or `~/.cursor/mcp.json` (global):
+
+```json
+{
+  "mcpServers": {
+    "nanobanana-mcp": {
+      "command": "node",
+      "args": ["/path/to/nanobanana-mcp/dist/index.js"],
+      "env": {
+        "GOOGLE_AI_API_KEY": "your_api_key"
+      }
+    }
+  }
+}
+```
+
+Or use environment variable interpolation:
+
+```json
+{
+  "mcpServers": {
+    "nanobanana-mcp": {
+      "command": "node",
+      "args": ["/path/to/nanobanana-mcp/dist/index.js"],
+      "env": {
+        "GOOGLE_AI_API_KEY": "${env:GOOGLE_AI_API_KEY}"
+      }
+    }
+  }
+}
+```
+
+See [Cursor MCP Documentation](https://cursor.com/docs/context/mcp) for more details.
 
 ## Tools
 
@@ -114,9 +150,30 @@ Switch models per-session without restarting:
 }
 ```
 
-## Slash Commands (Claude Code)
+## Slash Commands
 
-Install the plugin to `~/.claude/plugins/nanobanana/`:
+### Claude Code
+
+```bash
+mkdir -p ~/.claude/commands
+cp commands/claude-code/*.md ~/.claude/commands/
+```
+
+### Cursor
+
+```bash
+# Project-level
+mkdir -p .cursor/commands
+cp commands/cursor/*.md .cursor/commands/
+
+# Or global
+mkdir -p ~/.cursor/commands
+cp commands/cursor/*.md ~/.cursor/commands/
+```
+
+See [Cursor Slash Commands](https://cursor.com/changelog/1-6) for more details.
+
+### Available Commands
 
 ```
 /nb-flash  - Switch to Flash model (faster)
@@ -191,7 +248,7 @@ npm run start    # Run compiled server
 
 **Image generation fails:**
 - Verify API key is valid
-- Check quota at [Google AI Studio](https://makersuite.google.com)
+- Check quota at [Google AI Studio](https://aistudio.google.com)
 - Ensure `set_aspect_ratio` was called first
 
 **Tools not showing:**
@@ -207,4 +264,4 @@ MIT
 
 - [Report Issues](https://github.com/YCSE/nanobanana-mcp/issues)
 - [MCP Documentation](https://modelcontextprotocol.io)
-- [Google AI Studio](https://makersuite.google.com)
+- [Google AI Studio](https://aistudio.google.com)

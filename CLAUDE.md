@@ -48,7 +48,9 @@ Use `set_model` tool to switch models per-session without restarting:
 - `model="flash"` → gemini-2.5-flash-image (faster, default)
 - `model="pro"` → gemini-3-pro-image-preview (higher quality)
 
-**Slash Commands** (via Claude Code plugin at `~/.claude/plugins/nanobanana/`):
+**Slash Commands**:
+- Claude Code: `cp commands/claude-code/*.md ~/.claude/commands/`
+- Cursor: `cp commands/cursor/*.md ~/.cursor/commands/`
 - `/nb-flash` - Switch to Flash model
 - `/nb-pro` - Switch to Pro model
 

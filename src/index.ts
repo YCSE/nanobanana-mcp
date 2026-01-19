@@ -23,9 +23,20 @@ if (!API_KEY) {
 
 const genAI = new GoogleGenerativeAI(API_KEY);
 
+// Model selection via environment variable
+type ModelOption = "gemini-2.5-flash-image" | "gemini-3-pro-image-preview";
+const VALID_MODELS: ModelOption[] = ["gemini-2.5-flash-image", "gemini-3-pro-image-preview"];
+const DEFAULT_MODEL: ModelOption = "gemini-2.5-flash-image";
+
+const selectedModel = process.env.NANOBANANA_MODEL as ModelOption | undefined;
+const IMAGE_MODEL: ModelOption = selectedModel && VALID_MODELS.includes(selectedModel)
+  ? selectedModel
+  : DEFAULT_MODEL;
+
+console.error(`NanoBanana MCP: Using model ${IMAGE_MODEL}`);
+
 // Gemini REST API 직접 호출을 위한 설정
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
-const IMAGE_MODEL = "gemini-2.5-flash-image";
 
 // 이미지 생성/편집을 위한 REST API 호출 함수
 interface GeminiImageRequestPart {
@@ -44,9 +55,10 @@ interface GeminiImageResponse {
 
 async function callGeminiImageAPI(
   parts: GeminiImageRequestPart[],
-  aspectRatio: string
+  aspectRatio: string,
+  model: ModelOption = IMAGE_MODEL
 ): Promise<GeminiImageResponse> {
-  const url = `${GEMINI_API_BASE}/${IMAGE_MODEL}:streamGenerateContent?key=${API_KEY}`;
+  const url = `${GEMINI_API_BASE}/${model}:streamGenerateContent?key=${API_KEY}`;
 
   const requestBody = {
     contents: [
@@ -135,6 +147,7 @@ interface ConversationContext {
   }>;
   imageHistory: ImageHistoryEntry[];
   aspectRatio: AspectRatio | null;
+  selectedModel: ModelOption | null;
 }
 
 const conversations = new Map<string, ConversationContext>();
@@ -188,6 +201,7 @@ function getOrCreateContext(conversationId: string): ConversationContext {
       history: [],
       imageHistory: [],
       aspectRatio: null,  // Must be set via set_aspect_ratio before image generation
+      selectedModel: null,  // Uses IMAGE_MODEL (env default) if not set
     });
   }
   return conversations.get(conversationId)!;
@@ -378,6 +392,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["aspect_ratio"],
         },
       },
+      {
+        name: "set_model",
+        description: "Set the Gemini model for this session. 'flash' for faster generation (default), 'pro' for higher quality.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            model: {
+              type: "string",
+              enum: ["flash", "pro"],
+              description: "Model to use: 'flash' (gemini-2.5-flash-image) or 'pro' (gemini-3-pro-image-preview)",
+            },
+            conversation_id: {
+              type: "string",
+              description: "Session ID to apply this setting to (default: 'default')",
+            },
+          },
+          required: ["model"],
+        },
+      },
     ],
   };
 });
@@ -391,8 +424,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { message, conversation_id = "default", system_prompt, images = [] } = args as any;
 
         const context = getOrCreateContext(conversation_id);
+        const effectiveModel = context.selectedModel ?? IMAGE_MODEL;
         const model = genAI.getGenerativeModel({
-          model: "gemini-2.5-flash-image",
+          model: effectiveModel,
           systemInstruction: system_prompt,
         });
 
@@ -566,8 +600,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
           parts.push({ text: finalPrompt });
 
-          // REST API 직접 호출
-          const apiResponse = await callGeminiImageAPI(parts, effectiveAspectRatio);
+          // REST API 직접 호출 (세션 모델 우선, 없으면 환경 변수 기본값)
+          const effectiveModel = context.selectedModel ?? IMAGE_MODEL;
+          const apiResponse = await callGeminiImageAPI(parts, effectiveAspectRatio, effectiveModel);
 
           if (apiResponse.error) {
             return {
@@ -784,8 +819,9 @@ IMPORTANT: Create a completely new image that incorporates the requested changes
             },
           });
 
-          // REST API 직접 호출
-          const apiResponse = await callGeminiImageAPI(parts, effectiveAspectRatio);
+          // REST API 직접 호출 (세션 모델 우선, 없으면 환경 변수 기본값)
+          const effectiveModel = context.selectedModel ?? IMAGE_MODEL;
+          const apiResponse = await callGeminiImageAPI(parts, effectiveAspectRatio, effectiveModel);
 
           if (apiResponse.error) {
             return {
@@ -941,6 +977,35 @@ IMPORTANT: Create a completely new image that incorporates the requested changes
           content: [{
             type: "text",
             text: `✓ Aspect ratio set to ${aspect_ratio} for session: ${conversation_id}\nThis will apply to both image generation and editing.`,
+          }],
+        };
+      }
+
+      case "set_model": {
+        const { model, conversation_id = "default" } = args as any;
+
+        const modelMap: Record<string, ModelOption> = {
+          "flash": "gemini-2.5-flash-image",
+          "pro": "gemini-3-pro-image-preview",
+        };
+
+        if (!modelMap[model]) {
+          return {
+            content: [{
+              type: "text",
+              text: `Invalid model: ${model}. Use 'flash' or 'pro'.`,
+            }],
+            isError: true,
+          };
+        }
+
+        const context = getOrCreateContext(conversation_id);
+        context.selectedModel = modelMap[model];
+
+        return {
+          content: [{
+            type: "text",
+            text: `✓ Model set to ${model} (${modelMap[model]}) for session: ${conversation_id}`,
           }],
         };
       }

@@ -29,9 +29,10 @@ Single-file MCP server (`src/index.ts`) using stdio transport:
 | Tool | Model | Purpose |
 |------|-------|---------|
 | `set_aspect_ratio` | N/A | **Required before image generation/editing.** Set aspect ratio for session |
-| `gemini_chat` | gemini-2.5-flash-image | Multi-turn conversation with up to 10 images |
-| `gemini_generate_image` | gemini-2.5-flash-image | 2K image generation with consistency support |
-| `gemini_edit_image` | gemini-2.5-flash-image | Image editing via natural language |
+| `set_model` | N/A | Switch between flash/pro models at runtime |
+| `gemini_chat` | configurable | Multi-turn conversation with up to 10 images |
+| `gemini_generate_image` | configurable | 2K image generation with consistency support |
+| `gemini_edit_image` | configurable | Image editing via natural language |
 | `get_image_history` | N/A | View session image history |
 | `clear_conversation` | N/A | Reset conversation context |
 
@@ -41,9 +42,19 @@ Valid values: `1:1`, `9:16`, `16:9`, `3:4`, `4:3`, `3:2`, `2:3`, `5:4`, `4:5`, `
 
 Must call `set_aspect_ratio` before `gemini_generate_image` or `gemini_edit_image`. No default value - returns error if not set.
 
+### Runtime Model Selection
+
+Use `set_model` tool to switch models per-session without restarting:
+- `model="flash"` → gemini-2.5-flash-image (faster, default)
+- `model="pro"` → gemini-3-pro-image-preview (higher quality)
+
+**Slash Commands** (via Claude Code plugin at `~/.claude/plugins/nanobanana/`):
+- `/nb-flash` - Switch to Flash model
+- `/nb-pro` - Switch to Pro model
+
 ### Session Management
 
-- `conversations` Map stores per-session context (chat history + image history + aspect ratio)
+- `conversations` Map stores per-session context (chat history + image history + aspect ratio + model)
 - Image history supports references: `"last"` or `"history:N"`
 - `MAX_IMAGE_HISTORY = 10` images per session (memory management)
 - `MAX_REFERENCE_IMAGES = 3` included in consistency prompts
@@ -56,13 +67,25 @@ Default save location: `~/Documents/nanobanana_generated/`
 
 ## Configuration
 
-Requires `GOOGLE_AI_API_KEY` environment variable. Can be set via:
-- `.env` file in project root
-- Environment variable in MCP client config
+**Required:**
+- `GOOGLE_AI_API_KEY` - Your Google AI API key
+
+**Optional:**
+- `NANOBANANA_MODEL` - Model selection (default: `gemini-2.5-flash-image`)
+  - `gemini-2.5-flash-image` - NanoBanana (faster, default)
+  - `gemini-3-pro-image-preview` - NanoBanana Pro (higher quality)
+
+Can be set via `.env` file in project root or environment variable in MCP client config.
 
 ## Installation to Claude Code
 
 ```bash
+# Default model (gemini-2.5-flash-image)
 source .env && claude mcp add nanobanana-mcp "node" "dist/index.js" \
   -e "GOOGLE_AI_API_KEY=$GOOGLE_AI_API_KEY"
+
+# Pro model (gemini-3-pro-image-preview)
+source .env && claude mcp add nanobanana-mcp "node" "dist/index.js" \
+  -e "GOOGLE_AI_API_KEY=$GOOGLE_AI_API_KEY" \
+  -e "NANOBANANA_MODEL=gemini-3-pro-image-preview"
 ```

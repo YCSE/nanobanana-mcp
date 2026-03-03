@@ -12,4 +12,4 @@ mcp__nanobanana-mcp__set_model with model="flash"
 
 ## Confirmation
 
-After switching, confirm: "Switched to NanoBanana Flash (gemini-2.5-flash-image)"
+After switching, confirm: "Switched to NanoBanana Flash (gemini-3.1-flash-image-preview)"

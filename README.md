@@ -121,7 +121,7 @@ Switch models per-session without restarting:
 
 | Value | Model | Description |
 |-------|-------|-------------|
-| `flash` | gemini-2.5-flash-image | Faster (default) |
+| `flash` | gemini-3.1-flash-image-preview | Faster (default) |
 | `pro` | gemini-3-pro-image-preview | Higher quality |
 
 ### gemini_generate_image
@@ -228,7 +228,7 @@ set_model({ model: "pro" })
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `GOOGLE_AI_API_KEY` | Yes | Google AI API key |
-| `NANOBANANA_MODEL` | No | Default model (`gemini-2.5-flash-image` or `gemini-3-pro-image-preview`) |
+| `NANOBANANA_MODEL` | No | Default model (`gemini-3.1-flash-image-preview` or `gemini-3-pro-image-preview`) |
 
 ### Output Location
 

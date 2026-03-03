@@ -11,7 +11,7 @@ async function testImageGeneration() {
     console.log('Testing image generation...');
     
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
+      model: 'gemini-3.1-flash-image-preview',
       contents: 'A serene beach scene with turquoise water and sunset',
       config: {
         responseModalities: ['IMAGE', 'TEXT'],

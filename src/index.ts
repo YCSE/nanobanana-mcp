@@ -24,9 +24,9 @@ if (!API_KEY) {
 const genAI = new GoogleGenerativeAI(API_KEY);
 
 // Model selection via environment variable
-type ModelOption = "gemini-2.5-flash-image" | "gemini-3-pro-image-preview";
-const VALID_MODELS: ModelOption[] = ["gemini-2.5-flash-image", "gemini-3-pro-image-preview"];
-const DEFAULT_MODEL: ModelOption = "gemini-2.5-flash-image";
+type ModelOption = "gemini-3.1-flash-image-preview" | "gemini-3-pro-image-preview";
+const VALID_MODELS: ModelOption[] = ["gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview"];
+const DEFAULT_MODEL: ModelOption = "gemini-3.1-flash-image-preview";
 
 const selectedModel = process.env.NANOBANANA_MODEL as ModelOption | undefined;
 const IMAGE_MODEL: ModelOption = selectedModel && VALID_MODELS.includes(selectedModel)
@@ -238,7 +238,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: "gemini_chat",
-        description: "Chat with Gemini 2.5 Flash model. Supports multi-turn conversations with up to 10 reference images.",
+        description: "Chat with Gemini 3.1 Flash model. Supports multi-turn conversations with up to 10 reference images.",
         inputSchema: {
           type: "object",
           properties: {
@@ -401,7 +401,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             model: {
               type: "string",
               enum: ["flash", "pro"],
-              description: "Model to use: 'flash' (gemini-2.5-flash-image) or 'pro' (gemini-3-pro-image-preview)",
+              description: "Model to use: 'flash' (gemini-3.1-flash-image-preview) or 'pro' (gemini-3-pro-image-preview)",
             },
             conversation_id: {
               type: "string",
@@ -985,7 +985,7 @@ IMPORTANT: Create a completely new image that incorporates the requested changes
         const { model, conversation_id = "default" } = args as any;
 
         const modelMap: Record<string, ModelOption> = {
-          "flash": "gemini-2.5-flash-image",
+          "flash": "gemini-3.1-flash-image-preview",
           "pro": "gemini-3-pro-image-preview",
         };
 

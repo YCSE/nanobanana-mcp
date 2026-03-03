@@ -45,7 +45,7 @@ Must call `set_aspect_ratio` before `gemini_generate_image` or `gemini_edit_imag
 ### Runtime Model Selection
 
 Use `set_model` tool to switch models per-session without restarting:
-- `model="flash"` → gemini-2.5-flash-image (faster, default)
+- `model="flash"` → gemini-3.1-flash-image-preview (faster, default)
 - `model="pro"` → gemini-3-pro-image-preview (higher quality)
 
 **Slash Commands**:
@@ -73,8 +73,8 @@ Default save location: `~/Documents/nanobanana_generated/`
 - `GOOGLE_AI_API_KEY` - Your Google AI API key
 
 **Optional:**
-- `NANOBANANA_MODEL` - Model selection (default: `gemini-2.5-flash-image`)
-  - `gemini-2.5-flash-image` - NanoBanana (faster, default)
+- `NANOBANANA_MODEL` - Model selection (default: `gemini-3.1-flash-image-preview`)
+  - `gemini-3.1-flash-image-preview` - NanoBanana (faster, default)
   - `gemini-3-pro-image-preview` - NanoBanana Pro (higher quality)
 
 Can be set via `.env` file in project root or environment variable in MCP client config.
@@ -82,7 +82,7 @@ Can be set via `.env` file in project root or environment variable in MCP client
 ## Installation to Claude Code
 
 ```bash
-# Default model (gemini-2.5-flash-image)
+# Default model (gemini-3.1-flash-image-preview)
 source .env && claude mcp add nanobanana-mcp "node" "dist/index.js" \
   -e "GOOGLE_AI_API_KEY=$GOOGLE_AI_API_KEY"
 

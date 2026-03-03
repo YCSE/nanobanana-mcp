@@ -716,7 +716,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
 
           return {
-            content: [{ type: "text", text: successText }],
+            content: [
+              { type: "image", data: apiResponse.imageData, mimeType: "image/png" },
+              { type: "text", text: successText },
+            ],
           };
         } catch (error) {
           return {
@@ -937,7 +940,10 @@ IMPORTANT: Create a completely new image that incorporates the requested changes
           }
 
           return {
-            content: [{ type: "text", text: successText }],
+            content: [
+              { type: "image", data: apiResponse.imageData, mimeType: "image/png" },
+              { type: "text", text: successText },
+            ],
           };
         } catch (error) {
           return {

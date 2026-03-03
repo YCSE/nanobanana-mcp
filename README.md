@@ -4,7 +4,7 @@
 [![Gemini](https://img.shields.io/badge/Gemini-Image%20Models-orange)](https://ai.google.dev)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-MCP server that brings Gemini's image generation and editing capabilities to Claude Desktop, Claude Code, and Cursor.
+MCP server that brings Gemini's image generation and editing capabilities to Claude Desktop, Claude Code, and Cursor. Supports **Nano Banana 2** (Flash) and **Nano Banana Pro** models.
 
 ## Features
 
@@ -121,8 +121,8 @@ Switch models per-session without restarting:
 
 | Value | Model | Description |
 |-------|-------|-------------|
-| `flash` | gemini-3.1-flash-image-preview | Faster (default) |
-| `pro` | gemini-3-pro-image-preview | Higher quality |
+| `flash` | gemini-3.1-flash-image-preview | Nano Banana 2 - Faster (default) |
+| `pro` | gemini-3-pro-image-preview | Nano Banana Pro - Higher quality |
 
 ### gemini_generate_image
 

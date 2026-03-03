@@ -1,5 +1,6 @@
 # NanoBanana MCP
 
+[![npm](https://img.shields.io/npm/v/@ycse/nanobanana-mcp)](https://www.npmjs.com/package/@ycse/nanobanana-mcp)
 [![MCP](https://img.shields.io/badge/MCP-1.0.1-blue)](https://modelcontextprotocol.io)
 [![Gemini](https://img.shields.io/badge/Gemini-Image%20Models-orange)](https://ai.google.dev)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
@@ -21,24 +22,11 @@ MCP server that brings Gemini's image generation and editing capabilities to Cla
 - Node.js 18+
 - Google AI API Key ([Get one here](https://makersuite.google.com/app/apikey))
 
-### Install
-
-```bash
-git clone https://github.com/YCSE/nanobanana-mcp.git
-cd nanobanana-mcp
-npm install
-npm run build
-
-# Configure API Key
-cp .env.example .env
-# Edit .env and add your GOOGLE_AI_API_KEY
-```
-
 ### Add to Claude Code
 
 ```bash
-source .env && claude mcp add nanobanana-mcp "node" "$(pwd)/dist/index.js" \
-  -e "GOOGLE_AI_API_KEY=$GOOGLE_AI_API_KEY"
+claude mcp add nanobanana-mcp -- npx -y @ycse/nanobanana-mcp \
+  -e "GOOGLE_AI_API_KEY=your_api_key"
 ```
 
 ### Add to Claude Desktop
@@ -49,8 +37,8 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
 {
   "mcpServers": {
     "nanobanana-mcp": {
-      "command": "node",
-      "args": ["/path/to/nanobanana-mcp/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "@ycse/nanobanana-mcp"],
       "env": {
         "GOOGLE_AI_API_KEY": "your_api_key"
       }
@@ -67,26 +55,10 @@ Create or edit `.cursor/mcp.json` (project-level) or `~/.cursor/mcp.json` (globa
 {
   "mcpServers": {
     "nanobanana-mcp": {
-      "command": "node",
-      "args": ["/path/to/nanobanana-mcp/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "@ycse/nanobanana-mcp"],
       "env": {
         "GOOGLE_AI_API_KEY": "your_api_key"
-      }
-    }
-  }
-}
-```
-
-Or use environment variable interpolation:
-
-```json
-{
-  "mcpServers": {
-    "nanobanana-mcp": {
-      "command": "node",
-      "args": ["/path/to/nanobanana-mcp/dist/index.js"],
-      "env": {
-        "GOOGLE_AI_API_KEY": "${env:GOOGLE_AI_API_KEY}"
       }
     }
   }
@@ -155,20 +127,19 @@ Switch models per-session without restarting:
 ### Claude Code
 
 ```bash
-mkdir -p ~/.claude/commands
-cp commands/claude-code/*.md ~/.claude/commands/
+npx @ycse/nanobanana-mcp --install-commands claude-code
+# Or manually:
+# mkdir -p ~/.claude/commands
+# cp commands/claude-code/*.md ~/.claude/commands/
 ```
 
 ### Cursor
 
 ```bash
-# Project-level
-mkdir -p .cursor/commands
-cp commands/cursor/*.md .cursor/commands/
-
-# Or global
-mkdir -p ~/.cursor/commands
-cp commands/cursor/*.md ~/.cursor/commands/
+npx @ycse/nanobanana-mcp --install-commands cursor
+# Or manually:
+# mkdir -p .cursor/commands
+# cp commands/cursor/*.md .cursor/commands/
 ```
 
 See [Cursor Slash Commands](https://cursor.com/changelog/1-6) for more details.
@@ -239,6 +210,9 @@ Generated images save to `~/Documents/nanobanana_generated/`:
 ## Development
 
 ```bash
+git clone https://github.com/YCSE/nanobanana-mcp.git
+cd nanobanana-mcp
+npm install
 npm run dev      # Development mode with hot reload
 npm run build    # Production build
 npm run start    # Run compiled server
@@ -254,7 +228,7 @@ npm run start    # Run compiled server
 **Tools not showing:**
 1. Restart Claude Desktop/Code
 2. Check config file syntax
-3. Verify absolute paths
+3. Verify `npx -y @ycse/nanobanana-mcp` runs without errors
 
 ## License
 
@@ -262,6 +236,7 @@ MIT
 
 ## Links
 
+- [npm Package](https://www.npmjs.com/package/@ycse/nanobanana-mcp)
 - [Report Issues](https://github.com/YCSE/nanobanana-mcp/issues)
 - [MCP Documentation](https://modelcontextprotocol.io)
 - [Google AI Studio](https://aistudio.google.com)

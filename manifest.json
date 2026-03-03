@@ -1,0 +1,93 @@
+{
+  "manifest_version": "0.3",
+  "name": "nanobanana-mcp",
+  "display_name": "NanoBanana MCP",
+  "version": "1.1.0",
+  "description": "Gemini image generation, editing, and vision for Claude Desktop",
+  "long_description": "MCP server that brings Google Gemini's multimodal capabilities to Claude. Generate 2K images, edit existing images with natural language, chat with vision support, and maintain style consistency across sessions. Supports both Flash (fast) and Pro (high quality) models with runtime switching.",
+  "author": {
+    "name": "YCSE",
+    "url": "https://github.com/YCSE"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YCSE/nanobanana-mcp.git"
+  },
+  "homepage": "https://github.com/YCSE/nanobanana-mcp#readme",
+  "support": "https://github.com/YCSE/nanobanana-mcp/issues",
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "gemini",
+    "image-generation",
+    "image-editing",
+    "vision",
+    "ai",
+    "claude"
+  ],
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/index.js"],
+      "env": {
+        "GOOGLE_AI_API_KEY": "${user_config.api_key}",
+        "NANOBANANA_MODEL": "${user_config.default_model}"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "gemini_chat",
+      "description": "Chat with Gemini model with multi-turn conversations and up to 10 reference images"
+    },
+    {
+      "name": "gemini_generate_image",
+      "description": "Generate 2K images with session-based style/character consistency"
+    },
+    {
+      "name": "gemini_edit_image",
+      "description": "Edit existing images with natural language prompts"
+    },
+    {
+      "name": "set_aspect_ratio",
+      "description": "Set aspect ratio for image generation and editing"
+    },
+    {
+      "name": "set_model",
+      "description": "Switch between Flash (fast) and Pro (high quality) models"
+    },
+    {
+      "name": "get_image_history",
+      "description": "View generated/edited images in a session"
+    },
+    {
+      "name": "clear_conversation",
+      "description": "Reset conversation context and image history"
+    }
+  ],
+  "user_config": {
+    "api_key": {
+      "type": "string",
+      "title": "Google AI API Key",
+      "description": "Your Google AI Studio API key (get one at https://aistudio.google.com/apikey)",
+      "sensitive": true,
+      "required": true
+    },
+    "default_model": {
+      "type": "string",
+      "title": "Default Model",
+      "description": "gemini-3.1-flash-image-preview (faster) or gemini-3-pro-image-preview (higher quality)",
+      "default": "gemini-3.1-flash-image-preview",
+      "required": false
+    }
+  },
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  }
+}

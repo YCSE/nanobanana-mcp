@@ -1,5 +1,52 @@
 #!/usr/bin/env node
 
+import * as fs from "fs/promises";
+import * as path from "path";
+import * as os from "os";
+
+// --- CLI: --install-commands ---
+const INSTALL_TARGETS = ["claude-code", "cursor"] as const;
+
+const args = process.argv.slice(2);
+const installIdx = args.indexOf("--install-commands");
+if (installIdx !== -1) {
+  const target = args[installIdx + 1];
+  if (!target || !INSTALL_TARGETS.includes(target as any)) {
+    console.error(`Usage: nanobanana-mcp --install-commands <${INSTALL_TARGETS.join("|")}>`);
+    process.exit(1);
+  }
+
+  const { fileURLToPath } = await import("url");
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const srcDir = path.join(__dirname, "..", "commands", target);
+  const destDir =
+    target === "claude-code"
+      ? path.join(os.homedir(), ".claude", "commands")
+      : path.join(os.homedir(), ".cursor", "commands");
+
+  try {
+    const files = await fs.readdir(srcDir);
+    const mdFiles = files.filter((f) => f.endsWith(".md"));
+    if (mdFiles.length === 0) {
+      console.error(`No command files found in ${srcDir}`);
+      process.exit(1);
+    }
+    await fs.mkdir(destDir, { recursive: true });
+    await Promise.all(
+      mdFiles.map(async (file) => {
+        await fs.copyFile(path.join(srcDir, file), path.join(destDir, file));
+        console.log(`  Installed: ${file} → ${destDir}/`);
+      })
+    );
+    console.log(`\nDone! ${mdFiles.length} command(s) installed for ${target}.`);
+  } catch (err: any) {
+    console.error(`Failed to install commands: ${err.message}`);
+    process.exit(1);
+  }
+  process.exit(0);
+}
+
+// --- MCP Server ---
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -7,9 +54,6 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { GoogleGenerativeAI, Part } from "@google/generative-ai";
-import * as fs from "fs/promises";
-import * as path from "path";
-import * as os from "os";
 import dotenv from "dotenv";
 
 dotenv.config();
